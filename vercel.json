@@ -3,7 +3,8 @@
   "builds": [
     {
       "src": "backend.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": { "runtime": "python3.11" }
     },
     {
       "src": "index.html",
@@ -11,13 +12,7 @@
     }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/backend.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+    { "src": "/api/(.*)", "dest": "/backend.py" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
