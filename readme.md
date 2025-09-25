@@ -12,7 +12,7 @@
 ## 바로 사용하기
 
 ### 온라인 버전 (추천)
-👉 **[https://your-app.vercel.app](https://your-app.vercel.app)** 접속 후 바로 사용!
+👉 **https://kongyura.github.io/No_Vocal/** 접속 후 바로 사용!
 
 ### 로컬 실행
 1. 저장소 클론
