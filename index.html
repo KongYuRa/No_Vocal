@@ -42,6 +42,29 @@
             background-clip: text;
         }
 
+        .server-status {
+            background: rgba(255, 152, 0, 0.1);
+            border: 1px solid #ff9800;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #e65100;
+            font-weight: bold;
+        }
+
+        .server-status.connected {
+            background: rgba(76, 175, 80, 0.1);
+            border-color: #4caf50;
+            color: #2e7d32;
+        }
+
+        .server-status.error {
+            background: rgba(244, 67, 54, 0.1);
+            border-color: #f44336;
+            color: #c62828;
+        }
+
         .upload-area {
             border: 3px dashed #667eea;
             border-radius: 15px;
@@ -180,6 +203,7 @@
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
+            background: #ccc;
         }
 
         .process-btn:disabled::before {
@@ -337,9 +361,13 @@
     <div class="container">
         <h1>🎵 AI 보컬 리무버</h1>
         
+        <div class="server-status" id="serverStatus">
+            <span class="loading-spinner"></span>서버 연결 확인 중...
+        </div>
+        
         <div class="upload-area" id="uploadArea">
             <div class="upload-text">음악 파일을 드래그하거나 클릭하여 업로드</div>
-            <div class="upload-hint">지원 형식: MP3, WAV, M4A (최대 10MB)</div>
+            <div class="upload-hint">지원 형식: MP3, WAV, M4A (최대 50MB)</div>
             <input type="file" id="fileInput" class="file-input" accept="audio/*">
         </div>
 
@@ -354,7 +382,7 @@
             </button>
         </div>
 
-        <button class="process-btn" id="processBtn" disabled>파일을 먼저 업로드해주세요</button>
+        <button class="process-btn" id="processBtn" disabled>서버 연결을 확인해주세요</button>
 
         <div class="progress-container" id="progressContainer">
             <div class="progress-bar">
@@ -388,22 +416,23 @@
             • <strong>보컬 제거:</strong> 일반적인 보컬 제거로 반주만 남깁니다<br>
             • <strong>코러스 제거:</strong> 보컬, 백보컬, 하모니까지 모두 제거하여 순수 악기음만 남깁니다<br>
             • 최적의 결과를 위해 고품질 스테레오 오디오를 사용하세요<br>
-            • 처리 시간은 파일 길이에 따라 1-3분 정도 소요됩니다
+            • AI 처리 시간은 파일 길이에 따라 30초~3분 정도 소요됩니다<br>
+            • 웹 기반으로 설치 없이 바로 사용 가능합니다
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.10.0/tf.min.js"></script>
     <script>
-        class AdvancedVocalRemover {
+        class LightVocalRemover {
             constructor() {
-                this.audioContext = null;
                 this.currentMethod = 'vocal';
                 this.audioFile = null;
-                this.processedAudioBuffer = null;
-                this.vocalModel = null;
-                this.chorusModel = null;
+                // 자동으로 서버 URL 감지
+                this.serverUrl = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+                    ? 'http://localhost:5000'  // 로컬 개발
+                    : window.location.origin;  // 배포된 환경
+                this.isServerConnected = false;
                 this.setupEventListeners();
-                this.initializeAI();
+                this.checkServerConnection();
             }
 
             setupEventListeners() {
@@ -440,6 +469,7 @@
                         methodBtns.forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
                         this.currentMethod = btn.dataset.method;
+                        this.updateProcessButtonText();
                     });
                 });
 
@@ -450,588 +480,158 @@
                 document.getElementById('downloadBtn').addEventListener('click', () => {
                     this.downloadProcessedAudio();
                 });
+
+                // 주기적으로 서버 상태 확인
+                setInterval(() => this.checkServerConnection(), 30000); // 30초마다
             }
 
-            async initializeAI() {
+            async checkServerConnection() {
                 try {
-                    this.updateStatus('<span class="loading-spinner"></span>AI 모델 초기화 중...');
+                    const response = await fetch(`${this.serverUrl}/api/health`, {
+                        method: 'GET',
+                        timeout: 5000
+                    });
                     
-                    // 보컬 제거 모델 (U-Net 스타일 아키텍처)
-                    this.vocalModel = await this.createVocalSeparationModel();
-                    
-                    // 코러스 제거 모델 (더 강력한 분리 능력)
-                    this.chorusModel = await this.createChorusSeparationModel();
-                    
-                    this.updateStatus('🤖 AI 모델 준비 완료');
-                    
-                } catch (error) {
-                    console.error('AI 초기화 실패:', error);
-                    this.updateStatus('⚠️ AI 모델 로드 실패 - 기본 모드로 동작');
-                }
-            }
-
-            async createVocalSeparationModel() {
-                // U-Net 스타일의 보컬 분리 모델
-                const input = tf.input({shape: [null, 513, 2]});
-                
-                // Encoder
-                let x = tf.layers.conv2d({
-                    filters: 32,
-                    kernelSize: [3, 3],
-                    activation: 'relu',
-                    padding: 'same'
-                }).apply(input);
-                
-                const skip1 = x;
-                x = tf.layers.maxPooling2d({poolSize: [2, 1]}).apply(x);
-                
-                x = tf.layers.conv2d({
-                    filters: 64,
-                    kernelSize: [3, 3],
-                    activation: 'relu',
-                    padding: 'same'
-                }).apply(x);
-                
-                const skip2 = x;
-                x = tf.layers.maxPooling2d({poolSize: [2, 1]}).apply(x);
-                
-                // Bottleneck
-                x = tf.layers.conv2d({
-                    filters: 128,
-                    kernelSize: [3, 3],
-                    activation: 'relu',
-                    padding: 'same'
-                }).apply(x);
-                
-                // Decoder
-                x = tf.layers.upSampling2d({size: [2, 1]}).apply(x);
-                x = tf.layers.concatenate().apply([x, skip2]);
-                
-                x = tf.layers.conv2d({
-                    filters: 64,
-                    kernelSize: [3, 3],
-                    activation: 'relu',
-                    padding: 'same'
-                }).apply(x);
-                
-                x = tf.layers.upSampling2d({size: [2, 1]}).apply(x);
-                x = tf.layers.concatenate().apply([x, skip1]);
-                
-                x = tf.layers.conv2d({
-                    filters: 32,
-                    kernelSize: [3, 3],
-                    activation: 'relu',
-                    padding: 'same'
-                }).apply(x);
-                
-                // 출력: 보컬과 악기를 분리하는 마스크
-                const vocalMask = tf.layers.conv2d({
-                    filters: 1,
-                    kernelSize: [1, 1],
-                    activation: 'sigmoid',
-                    name: 'vocal_mask'
-                }).apply(x);
-                
-                const instrumentalMask = tf.layers.conv2d({
-                    filters: 1,
-                    kernelSize: [1, 1],
-                    activation: 'sigmoid',
-                    name: 'instrumental_mask'
-                }).apply(x);
-                
-                const model = tf.model({
-                    inputs: input,
-                    outputs: [vocalMask, instrumentalMask]
-                });
-                
-                model.compile({
-                    optimizer: tf.train.adam(0.001),
-                    loss: 'meanSquaredError'
-                });
-                
-                return model;
-            }
-
-            async createChorusSeparationModel() {
-                // 더 복잡한 모델로 코러스까지 제거
-                const input = tf.input({shape: [null, 513, 2]});
-                
-                // Multi-scale feature extraction
-                const conv1 = tf.layers.conv2d({
-                    filters: 16,
-                    kernelSize: [3, 3],
-                    activation: 'relu',
-                    padding: 'same'
-                }).apply(input);
-                
-                const conv2 = tf.layers.conv2d({
-                    filters: 16,
-                    kernelSize: [5, 5],
-                    activation: 'relu',
-                    padding: 'same'
-                }).apply(input);
-                
-                const conv3 = tf.layers.conv2d({
-                    filters: 16,
-                    kernelSize: [7, 7],
-                    activation: 'relu',
-                    padding: 'same'
-                }).apply(input);
-                
-                let x = tf.layers.concatenate().apply([conv1, conv2, conv3]);
-                
-                // Deep processing layers
-                for (let i = 0; i < 4; i++) {
-                    x = tf.layers.conv2d({
-                        filters: 64,
-                        kernelSize: [3, 3],
-                        activation: 'relu',
-                        padding: 'same'
-                    }).apply(x);
-                    
-                    x = tf.layers.batchNormalization().apply(x);
-                    
-                    if (i % 2 === 0) {
-                        x = tf.layers.dropout({rate: 0.2}).apply(x);
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.isServerConnected = true;
+                        this.updateServerStatus('connected', `🟢 서버 연결됨 (AI 모델: ${data.models_loaded ? '로드됨' : '로딩 중'})`);
+                        this.updateProcessButtonText();
+                    } else {
+                        throw new Error('서버 응답 오류');
                     }
+                } catch (error) {
+                    this.isServerConnected = false;
+                    this.updateServerStatus('error', '🔴 서버 연결 실패 - 잠시 후 다시 시도해주세요');
+                    this.updateProcessButtonText();
                 }
-                
-                // Attention mechanism (simplified)
-                const attention = tf.layers.conv2d({
-                    filters: 1,
-                    kernelSize: [1, 1],
-                    activation: 'sigmoid'
-                }).apply(x);
-                
-                x = tf.layers.multiply().apply([x, attention]);
-                
-                // Final separation masks
-                const instrumentalMask = tf.layers.conv2d({
-                    filters: 1,
-                    kernelSize: [1, 1],
-                    activation: 'sigmoid',
-                    name: 'instrumental_only'
-                }).apply(x);
-                
-                const model = tf.model({
-                    inputs: input,
-                    outputs: instrumentalMask
-                });
-                
-                model.compile({
-                    optimizer: tf.train.adam(0.001),
-                    loss: 'meanSquaredError'
-                });
-                
-                return model;
             }
 
-            async handleFile(file) {
+            updateServerStatus(status, message) {
+                const serverStatus = document.getElementById('serverStatus');
+                serverStatus.className = `server-status ${status}`;
+                serverStatus.innerHTML = message;
+            }
+
+            updateProcessButtonText() {
+                const processBtn = document.getElementById('processBtn');
+                
+                if (!this.isServerConnected) {
+                    processBtn.disabled = true;
+                    processBtn.textContent = '서버 연결을 확인해주세요';
+                } else if (!this.audioFile) {
+                    processBtn.disabled = true;
+                    processBtn.textContent = '파일을 먼저 업로드해주세요';
+                } else {
+                    processBtn.disabled = false;
+                    processBtn.textContent = this.currentMethod === 'vocal' ? 
+                        '🎤 AI 보컬 제거 시작' : '🎵 AI 코러스 제거 시작';
+                }
+            }
+
+            handleFile(file) {
                 if (!file || !file.type.startsWith('audio/')) {
                     alert('올바른 오디오 파일을 선택해주세요.');
                     return;
                 }
 
-                if (file.size > 10 * 1024 * 1024) {
-                    alert('파일 크기는 10MB를 초과할 수 없습니다.');
+                if (file.size > 50 * 1024 * 1024) {
+                    alert('파일 크기는 50MB를 초과할 수 없습니다.');
                     return;
                 }
 
                 this.audioFile = file;
-                this.updateStatus(`📁 파일 로드됨: ${file.name}`);
+                this.updateStatus(`📁 파일 로드됨: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
                 
-                // AudioContext 초기화
-                if (!this.audioContext) {
-                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                }
-
                 // 원본 오디오 표시
                 const originalAudio = document.getElementById('originalAudio');
                 originalAudio.src = URL.createObjectURL(file);
 
-                // 처리 버튼 활성화
-                const processBtn = document.getElementById('processBtn');
-                processBtn.disabled = false;
-                processBtn.innerHTML = this.currentMethod === 'vocal' ? 
-                    '🎤 보컬 제거 시작' : '🎵 코러스 제거 시작';
+                // 처리 버튼 업데이트
+                this.updateProcessButtonText();
             }
 
             async processAudio() {
-                if (!this.audioFile) return;
+                if (!this.audioFile || !this.isServerConnected) return;
 
                 try {
                     this.showProgress();
-                    this.updateStatus('<span class="loading-spinner"></span>오디오 분석 중...');
-                    this.updateProgress(10, '오디오 파일 읽는 중...');
+                    this.updateStatus('🚀 서버로 파일 전송 중...');
+                    this.updateProgress(10, '서버 연결 중...');
 
-                    // 파일을 ArrayBuffer로 읽기
-                    const arrayBuffer = await this.audioFile.arrayBuffer();
-                    this.updateProgress(20, '오디오 디코딩 중...');
+                    // FormData 생성
+                    const formData = new FormData();
+                    formData.append('audio', this.audioFile);
+                    formData.append('method', this.currentMethod);
 
-                    // AudioBuffer로 디코드
-                    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-                    this.updateProgress(30, 'AI 모델 준비 중...');
+                    this.updateProgress(20, 'AI 처리 시작...');
 
-                    let processedBuffer;
-                    
-                    if (this.currentMethod === 'vocal') {
-                        this.updateProgress(40, '보컬 분리 처리 중...');
-                        processedBuffer = await this.performVocalSeparation(audioBuffer);
-                    } else {
-                        this.updateProgress(40, '코러스 분리 처리 중...');
-                        processedBuffer = await this.performChorusSeparation(audioBuffer);
+                    // 서버로 요청 전송
+                    const response = await fetch(`${this.serverUrl}/api/separate`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || `서버 오류: ${response.status}`);
                     }
 
-                    this.updateProgress(80, '결과 파일 생성 중...');
+                    this.updateProgress(60, 'AI 처리 완료, 파일 다운로드 중...');
 
-                    // 처리된 오디오를 Blob으로 변환
-                    const processedBlob = await this.audioBufferToBlob(processedBuffer);
-                    this.updateProgress(100, '처리 완료!');
+                    // 처리된 오디오 파일 받기
+                    const processedBlob = await response.blob();
+                    this.updateProgress(80, '결과 파일 준비 중...');
 
                     // 결과 표시
-                    this.displayResult(processedBlob, processedBuffer);
-                    this.updateStatus('✅ 처리가 완료되었습니다!');
+                    this.displayResult(processedBlob);
+                    this.updateProgress(100, '처리 완료!');
+                    this.updateStatus('✅ AI 처리가 완료되었습니다!');
 
                 } catch (error) {
                     console.error('처리 중 오류:', error);
-                    this.updateStatus('❌ 처리 중 오류가 발생했습니다: ' + error.message);
+                    this.updateStatus(`❌ 처리 중 오류: ${error.message}`);
                     this.hideProgress();
                 }
             }
 
-            async performVocalSeparation(audioBuffer) {
-                // 스테레오 채널 분리
-                const leftChannel = audioBuffer.getChannelData(0);
-                const rightChannel = audioBuffer.numberOfChannels > 1 ? 
-                    audioBuffer.getChannelData(1) : leftChannel;
-
-                // STFT 변환
-                const stftData = await this.performSTFT(leftChannel, rightChannel);
-                this.updateProgress(50, 'AI 보컬 분리 중...');
-
-                // AI 모델 적용 (실제 환경에서는 훈련된 모델 사용)
-                let separatedData;
-                if (this.vocalModel) {
-                    try {
-                        const [vocalMask, instrumentalMask] = this.vocalModel.predict(stftData);
-                        // 악기 마스크 적용
-                        separatedData = await this.applyMask(stftData, instrumentalMask);
-                        vocalMask.dispose();
-                        instrumentalMask.dispose();
-                    } catch (error) {
-                        console.warn('AI 모델 적용 실패, 고급 알고리즘 사용:', error);
-                        separatedData = await this.advancedVocalRemoval(stftData);
-                    }
-                } else {
-                    separatedData = await this.advancedVocalRemoval(stftData);
-                }
-
-                this.updateProgress(70, 'ISTFT 변환 중...');
-                
-                // ISTFT로 시간 도메인 복원
-                const processedBuffer = await this.performISTFT(separatedData, audioBuffer.sampleRate);
-                
-                stftData.dispose();
-                if (separatedData !== stftData) separatedData.dispose();
-                
-                return processedBuffer;
-            }
-
-            async performChorusSeparation(audioBuffer) {
-                const leftChannel = audioBuffer.getChannelData(0);
-                const rightChannel = audioBuffer.numberOfChannels > 1 ? 
-                    audioBuffer.getChannelData(1) : leftChannel;
-
-                const stftData = await this.performSTFT(leftChannel, rightChannel);
-                this.updateProgress(50, 'AI 코러스 분리 중...');
-
-                let separatedData;
-                if (this.chorusModel) {
-                    try {
-                        const instrumentalMask = this.chorusModel.predict(stftData);
-                        separatedData = await this.applyMask(stftData, instrumentalMask);
-                        instrumentalMask.dispose();
-                    } catch (error) {
-                        console.warn('AI 코러스 모델 적용 실패, 강화 알고리즘 사용:', error);
-                        separatedData = await this.advancedChorusRemoval(stftData);
-                    }
-                } else {
-                    separatedData = await this.advancedChorusRemoval(stftData);
-                }
-
-                this.updateProgress(70, 'ISTFT 변환 중...');
-                
-                const processedBuffer = await this.performISTFT(separatedData, audioBuffer.sampleRate);
-                
-                stftData.dispose();
-                if (separatedData !== stftData) separatedData.dispose();
-                
-                return processedBuffer;
-            }
-
-            async performSTFT(leftChannel, rightChannel) {
-                const windowSize = 2048;
-                const hopSize = windowSize / 4;
-                const numFrames = Math.floor((leftChannel.length - windowSize) / hopSize) + 1;
-                
-                // 실제 FFT 구현 (간소화된 버전)
-                const spectrogram = new Float32Array(numFrames * (windowSize / 2 + 1) * 2); // 실수부, 허수부
-                
-                // 해밍 윈도우
-                const window = new Float32Array(windowSize);
-                for (let i = 0; i < windowSize; i++) {
-                    window[i] = 0.54 - 0.46 * Math.cos(2 * Math.PI * i / (windowSize - 1));
-                }
-                
-                for (let frame = 0; frame < numFrames; frame++) {
-                    const startIdx = frame * hopSize;
-                    
-                    // 윈도우 적용 후 FFT (실제로는 더 정교한 FFT 필요)
-                    for (let bin = 0; bin < windowSize / 2 + 1; bin++) {
-                        const idx = frame * (windowSize / 2 + 1) * 2 + bin * 2;
-                        
-                        // 좌우 채널의 복소수 스펙트로그램 생성
-                        let realPart = 0, imagPart = 0;
-                        for (let k = 0; k < windowSize && startIdx + k < leftChannel.length; k++) {
-                            const angle = -2 * Math.PI * bin * k / windowSize;
-                            const leftSample = leftChannel[startIdx + k] * window[k];
-                            const rightSample = rightChannel[startIdx + k] * window[k];
-                            const sample = (leftSample + rightSample) / 2;
-                            
-                            realPart += sample * Math.cos(angle);
-                            imagPart += sample * Math.sin(angle);
-                        }
-                        
-                        spectrogram[idx] = realPart;
-                        spectrogram[idx + 1] = imagPart;
-                    }
-                }
-                
-                return tf.tensor3d(spectrogram, [1, numFrames, (windowSize / 2 + 1) * 2]);
-            }
-
-            async performISTFT(stftData, sampleRate) {
-                const windowSize = 2048;
-                const hopSize = windowSize / 4;
-                const stftShape = stftData.shape;
-                const numFrames = stftShape[1];
-                const numBins = stftShape[2] / 2;
-                
-                const outputLength = (numFrames - 1) * hopSize + windowSize;
-                const outputBuffer = this.audioContext.createBuffer(1, outputLength, sampleRate);
-                const outputData = outputBuffer.getChannelData(0);
-                
-                const stftArray = await stftData.data();
-                
-                // 해밍 윈도우
-                const window = new Float32Array(windowSize);
-                for (let i = 0; i < windowSize; i++) {
-                    window[i] = 0.54 - 0.46 * Math.cos(2 * Math.PI * i / (windowSize - 1));
-                }
-                
-                for (let frame = 0; frame < numFrames; frame++) {
-                    const startIdx = frame * hopSize;
-                    
-                    // IFFT (간소화된 구현)
-                    for (let n = 0; n < windowSize && startIdx + n < outputLength; n++) {
-                        let sample = 0;
-                        for (let bin = 0; bin < numBins; bin++) {
-                            const idx = frame * numBins * 2 + bin * 2;
-                            const real = stftArray[idx];
-                            const imag = stftArray[idx + 1];
-                            const angle = 2 * Math.PI * bin * n / windowSize;
-                            sample += real * Math.cos(angle) - imag * Math.sin(angle);
-                        }
-                        outputData[startIdx + n] += sample * window[n] / windowSize;
-                    }
-                }
-                
-                return outputBuffer;
-            }
-
-            async applyMask(stftData, mask) {
-                const maskArray = await mask.data();
-                const stftArray = await stftData.data();
-                const maskedData = new Float32Array(stftArray.length);
-                
-                for (let i = 0; i < stftArray.length; i += 2) {
-                    const maskValue = maskArray[Math.floor(i / 2)];
-                    maskedData[i] = stftArray[i] * maskValue;
-                    maskedData[i + 1] = stftArray[i + 1] * maskValue;
-                }
-                
-                return tf.tensor3d(maskedData, stftData.shape);
-            }
-
-            async advancedVocalRemoval(stftData) {
-                const stftArray = await stftData.data();
-                const processedData = new Float32Array(stftArray.length);
-                const shape = stftData.shape;
-                const numFrames = shape[1];
-                const numBins = shape[2] / 2;
-                
-                // 고급 보컬 제거 알고리즘
-                for (let frame = 0; frame < numFrames; frame++) {
-                    for (let bin = 0; bin < numBins; bin++) {
-                        const idx = frame * numBins * 2 + bin * 2;
-                        const real = stftArray[idx];
-                        const imag = stftArray[idx + 1];
-                        const magnitude = Math.sqrt(real * real + imag * imag);
-                        const phase = Math.atan2(imag, real);
-                        
-                        // 중앙 주파수 대역에서 보컬 제거 (개선된 알고리즘)
-                        let attenuation = 1.0;
-                        if (bin > numBins * 0.1 && bin < numBins * 0.8) {
-                            // 주파수 선택적 감쇠
-                            const vocalRange = Math.exp(-Math.pow((bin - numBins * 0.3) / (numBins * 0.2), 2));
-                            attenuation = Math.max(0.1, 1.0 - vocalRange * 0.9);
-                        }
-                        
-                        const newMagnitude = magnitude * attenuation;
-                        processedData[idx] = newMagnitude * Math.cos(phase);
-                        processedData[idx + 1] = newMagnitude * Math.sin(phase);
-                    }
-                }
-                
-                return tf.tensor3d(processedData, shape);
-            }
-
-            async advancedChorusRemoval(stftData) {
-                const stftArray = await stftData.data();
-                const processedData = new Float32Array(stftArray.length);
-                const shape = stftData.shape;
-                const numFrames = shape[1];
-                const numBins = shape[2] / 2;
-                
-                // 더 강력한 코러스 제거 알고리즘
-                for (let frame = 0; frame < numFrames; frame++) {
-                    for (let bin = 0; bin < numBins; bin++) {
-                        const idx = frame * numBins * 2 + bin * 2;
-                        const real = stftArray[idx];
-                        const imag = stftArray[idx + 1];
-                        const magnitude = Math.sqrt(real * real + imag * imag);
-                        const phase = Math.atan2(imag, real);
-                        
-                        // 보컬 및 코러스 주파수 대역에서 강한 감쇠
-                        let attenuation = 1.0;
-                        
-                        // 기본 보컬 대역 (200Hz - 2kHz)
-                        if (bin > numBins * 0.05 && bin < numBins * 0.6) {
-                            const vocalAttenuation = Math.exp(-Math.pow((bin - numBins * 0.25) / (numBins * 0.15), 2));
-                            attenuation *= Math.max(0.05, 1.0 - vocalAttenuation * 0.95);
-                        }
-                        
-                        // 코러스 및 하모니 대역 (더 넓은 범위)
-                        if (bin > numBins * 0.08 && bin < numBins * 0.75) {
-                            const chorusAttenuation = Math.exp(-Math.pow((bin - numBins * 0.4) / (numBins * 0.25), 2));
-                            attenuation *= Math.max(0.08, 1.0 - chorusAttenuation * 0.85);
-                        }
-                        
-                        // 고조파 제거
-                        for (let harmonic = 2; harmonic <= 4; harmonic++) {
-                            const harmonicBin = bin / harmonic;
-                            if (harmonicBin > numBins * 0.1 && harmonicBin < numBins * 0.3) {
-                                attenuation *= 0.7;
-                            }
-                        }
-                        
-                        const newMagnitude = magnitude * attenuation;
-                        processedData[idx] = newMagnitude * Math.cos(phase);
-                        processedData[idx + 1] = newMagnitude * Math.sin(phase);
-                    }
-                }
-                
-                return tf.tensor3d(processedData, shape);
-            }
-
-            async audioBufferToBlob(audioBuffer) {
-                const numberOfChannels = audioBuffer.numberOfChannels;
-                const length = audioBuffer.length;
-                const sampleRate = audioBuffer.sampleRate;
-                
-                // WAV 파일 생성
-                const buffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
-                const view = new DataView(buffer);
-                
-                // WAV 헤더 작성
-                const writeString = (offset, string) => {
-                    for (let i = 0; i < string.length; i++) {
-                        view.setUint8(offset + i, string.charCodeAt(i));
-                    }
-                };
-                
-                writeString(0, 'RIFF');
-                view.setUint32(4, 36 + length * numberOfChannels * 2, true);
-                writeString(8, 'WAVE');
-                writeString(12, 'fmt ');
-                view.setUint32(16, 16, true);
-                view.setUint16(20, 1, true);
-                view.setUint16(22, numberOfChannels, true);
-                view.setUint32(24, sampleRate, true);
-                view.setUint32(28, sampleRate * numberOfChannels * 2, true);
-                view.setUint16(32, numberOfChannels * 2, true);
-                view.setUint16(34, 16, true);
-                writeString(36, 'data');
-                view.setUint32(40, length * numberOfChannels * 2, true);
-                
-                // 오디오 데이터 작성 (정규화 및 클리핑 적용)
-                let offset = 44;
-                for (let i = 0; i < length; i++) {
-                    for (let channel = 0; channel < numberOfChannels; channel++) {
-                        let sample = audioBuffer.getChannelData(channel)[i];
-                        
-                        // 노이즈 게이트 적용
-                        if (Math.abs(sample) < 0.001) sample = 0;
-                        
-                        // 소프트 클리핑
-                        sample = Math.max(-1, Math.min(1, sample));
-                        if (sample > 0.95) sample = 0.95 + (sample - 0.95) * 0.2;
-                        if (sample < -0.95) sample = -0.95 + (sample + 0.95) * 0.2;
-                        
-                        const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-                        view.setInt16(offset, intSample, true);
-                        offset += 2;
-                    }
-                }
-                
-                return new Blob([buffer], { type: 'audio/wav' });
-            }
-
-            displayResult(processedBlob, processedBuffer) {
-                this.processedAudioBuffer = processedBuffer;
-                
+            displayResult(processedBlob) {
+                // 처리된 오디오 표시
                 const processedAudio = document.getElementById('processedAudio');
                 processedAudio.src = URL.createObjectURL(processedBlob);
+                
+                // 다운로드용 blob 저장
+                this.processedBlob = processedBlob;
                 
                 // 결과 패널 표시
                 document.getElementById('audioPlayer').style.display = 'block';
                 
                 // 부드러운 스크롤
-                document.getElementById('audioPlayer').scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'center'
-                });
+                setTimeout(() => {
+                    document.getElementById('audioPlayer').scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                }, 500);
             }
 
             downloadProcessedAudio() {
-                if (!this.processedAudioBuffer) return;
+                if (!this.processedBlob) return;
                 
-                this.audioBufferToBlob(this.processedAudioBuffer).then(blob => {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    
-                    const methodName = this.currentMethod === 'vocal' ? 'vocal_removed' : 'chorus_removed';
-                    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:\-]/g, '');
-                    a.download = `${methodName}_${timestamp}.wav`;
-                    
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    
-                    this.updateStatus('💾 파일이 다운로드되었습니다!');
-                });
+                const url = URL.createObjectURL(this.processedBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                const methodName = this.currentMethod === 'vocal' ? 'vocal_removed' : 'chorus_removed';
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/[:\-]/g, '');
+                a.download = `${methodName}_${timestamp}.wav`;
+                
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                this.updateStatus('💾 파일이 다운로드되었습니다!');
             }
 
             updateStatus(message) {
@@ -1045,7 +645,7 @@
 
             hideProgress() {
                 document.getElementById('progressContainer').style.display = 'none';
-                document.getElementById('processBtn').disabled = false;
+                this.updateProcessButtonText();
             }
 
             updateProgress(percent, text = '') {
@@ -1064,7 +664,16 @@
 
         // 앱 초기화
         document.addEventListener('DOMContentLoaded', () => {
-            new AdvancedVocalRemover();
+            new LightVocalRemover();
+        });
+
+        // 전역 에러 핸들러
+        window.addEventListener('error', (e) => {
+            console.error('전역 오류:', e.error);
+        });
+
+        window.addEventListener('unhandledrejection', (e) => {
+            console.error('처리되지 않은 Promise 거부:', e.reason);
         });
     </script>
 </body>
