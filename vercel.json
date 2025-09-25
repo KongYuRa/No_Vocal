@@ -1,5 +1,15 @@
 {
-  "version": 3,
+  "version": 2,
+  "builds": [
+    {
+      "src": "backend.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    }
+  ],
   "routes": [
     {
       "src": "/api/(.*)",
@@ -9,10 +19,5 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ],
-  "functions": {
-    "backend.py": {
-      "runtime": "python3.11"
-    }
-  }
+  ]
 }
