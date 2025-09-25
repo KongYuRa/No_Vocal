@@ -1,31 +1,18 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "vocal_remover_backend.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "50mb"
-      }
-    },
-    {
-      "src": "index.html",
-      "use": "@vercel/static"
-    }
-  ],
+  "version": 3,
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "vocal_remover_backend.py"
+      "dest": "/backend.py"
     },
     {
       "src": "/(.*)",
-      "dest": "index.html"
+      "dest": "/index.html"
     }
   ],
   "functions": {
-    "vocal_remover_backend.py": {
-      "maxDuration": 300
+    "backend.py": {
+      "runtime": "python3.11"
     }
   }
 }
