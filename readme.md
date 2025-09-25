@@ -1,15 +1,15 @@
-# 🎵 AI 보컬 리무버
+# AI 보컬 리무버
 
 딥러닝 기반 고품질 보컬 제거 웹 애플리케이션
 
-## ✨ 기능
+## 기능
 
-- 🎤 **보컬 제거**: 메인 보컬만 제거하고 악기 소리 유지
-- 🎵 **코러스 제거**: 보컬 + 백보컬 + 하모니까지 모두 제거
-- 🤖 **AI 기반**: U-Net과 CNN을 활용한 고품질 처리
-- 🌐 **웹 기반**: 설치 없이 브라우저에서 바로 사용
+- **보컬 제거**: 메인 보컬만 제거하고 악기 소리 유지
+- **코러스 제거**: 보컬 + 백보컬 + 하모니까지 모두 제거
+- **AI 기반**: U-Net과 CNN을 활용한 고품질 처리
+- **웹 기반**: 설치 없이 브라우저에서 바로 사용
 
-## 🚀 바로 사용하기
+## 바로 사용하기
 
 ### 온라인 버전 (추천)
 👉 **[https://your-app.vercel.app](https://your-app.vercel.app)** 접속 후 바로 사용!
@@ -33,14 +33,14 @@ python vocal_remover_backend.py
 
 4. 브라우저에서 `http://localhost:5000` 접속
 
-## 🐳 Docker로 실행
+## Docker로 실행
 
 ```bash
 docker build -t ai-vocal-remover .
 docker run -p 5000:5000 ai-vocal-remover
 ```
 
-## 📁 프로젝트 구조
+## 프로젝트 구조
 
 ```
 ai-vocal-remover/
@@ -53,7 +53,7 @@ ai-vocal-remover/
 └── README.md             # 이 파일
 ```
 
-## 🛠 기술 스택
+## 기술 스택
 
 **백엔드:**
 - Python + Flask
@@ -71,52 +71,20 @@ ai-vocal-remover/
 - Docker 지원
 - GitHub Actions
 
-## 🎯 사용법
+## 사용법
 
 1. 오디오 파일 업로드 (MP3, WAV, M4A)
 2. 처리 방식 선택 (보컬 제거 / 코러스 제거)  
 3. AI 처리 시작
 4. 결과 미리 듣기 및 다운로드
 
-## 📊 지원 형식
+## 지원 형식
 
 **입력:** MP3, WAV, M4A (최대 50MB)
 **출력:** WAV (고품질)
 
-## ⚡ 성능
+## 성능
 
 - **처리 시간:** 3분 음악 기준 30초~2분
 - **품질:** 전문 소프트웨어 수준
 - **용량:** 50MB까지 지원
-
-## 🚀 배포하기
-
-### Vercel 배포 (무료)
-1. [vercel.com](https://vercel.com) 가입
-2. GitHub 저장소 연결
-3. 자동 배포 완료!
-
-### Railway 배포 ($5/월)
-1. [railway.app](https://railway.app) 가입
-2. GitHub 저장소 연결
-3. 환경변수 설정 후 배포
-
-## 🤝 기여하기
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 라이선스
-
-MIT License - 자유롭게 사용, 수정, 배포하세요!
-
-## 🙏 도움말
-
-문제가 생기면 [Issues](https://github.com/yourusername/ai-vocal-remover/issues)에 등록해주세요.
-
----
-
-⭐ 이 프로젝트가 도움이 되었다면 Star를 눌러주세요!
