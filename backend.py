@@ -365,6 +365,18 @@ if __name__ == '__main__':
     print("웹 인터페이스: http://localhost:5000")
     print("API 문서: http://localhost:5000")
     
-    app.run(host='0.0.0.0', port=5000, debug=True)keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same')(merged)
-        x = tf.keras.layers.BatchNormalization()(x)
-        x = tf.
+if __name__ == '__main__':
+    print("🎵 AI 보컬 리무버 백엔드 시작")
+    print("필요한 패키지 설치 명령:")
+    print("pip install -r requirements.txt")
+    print()
+    
+    # 모델 로드
+    vocal_separator.load_models()
+    
+    # 서버 시작
+    print("서버 시작 중...")
+    print("웹 인터페이스: http://localhost:5000")
+    print("API 문서: http://localhost:5000")
+    
+    app.run(host='0.0.0.0', port=5000, debug=True)
