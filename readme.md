@@ -100,23 +100,3 @@ ai-vocal-remover/
 1. [railway.app](https://railway.app) 가입
 2. GitHub 저장소 연결
 3. 환경변수 설정 후 배포
-
-## 🤝 기여하기
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 라이선스
-
-MIT License - 자유롭게 사용, 수정, 배포하세요!
-
-## 🙏 도움말
-
-문제가 생기면 [Issues](https://github.com/yourusername/ai-vocal-remover/issues)에 등록해주세요.
-
----
-
-⭐ 이 프로젝트가 도움이 되었다면 Star를 눌러주세요!
